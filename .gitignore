@@ -1,0 +1,4 @@
+# Chặn thư mục chứa dữ liệu database (nếu bạn có mount volume ra ngoài)
+/mysql_data
+/data
+.env

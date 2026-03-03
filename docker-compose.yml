@@ -1,0 +1,60 @@
+
+services:
+  # Dịch vụ Backend (Laravel)
+  backend:
+    image: bitnami/laravel:latest
+    container_name: backend_app
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../backend:/app
+    environment:
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_DATABASE=internship_management
+      - DB_USERNAME=root
+      - DB_PASSWORD=root
+    depends_on:
+      - mysql
+    networks:
+      - app-network
+
+  # Dịch vụ Frontend (React JS)
+  frontend:
+    image: node:18-alpine
+    container_name: frontend_app
+    working_dir: /app
+    ports:
+      - "3000:3000" # Truy cập React tại localhost:3000
+    volumes:
+      - ../frontend:/app
+    command: sh -c "npm install && npm start" # Tự động cài thư viện và chạy
+    networks:
+      - app-network
+
+  # Dịch vụ Database (MySQL)
+  mysql:
+    image: mysql:8.0
+    container_name: mysql_db
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: internship_management
+    ports:
+      - "3306:3306"
+    networks:
+      - app-network
+
+  # Công cụ quản lý phpMyAdmin
+  phpmyadmin:
+    image: phpmyadmin
+    container_name: phpmyadmin_tool
+    environment:
+      PMA_HOST: mysql
+    ports:
+      - "8080:80"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
