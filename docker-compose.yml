@@ -1,65 +1,122 @@
+# ============================================================
+# docker-compose.yml
+# ============================================================
 services:
+
+  # ----------------------------------------------------------
+  # MySQL Database
+  # ----------------------------------------------------------
+  mysql:
+    image: mysql:8.0
+    container_name: mysql_db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: capstone_internship_management
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - app-network
+    # Healthcheck: backend chỉ khởi động khi MySQL thực sự sẵn sàng
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  # ----------------------------------------------------------
+  # Backend Laravel
+  # ----------------------------------------------------------
   backend:
-    build: 
+    build:
       context: ../backend-api
       dockerfile: Dockerfile
     container_name: backend-api
+    restart: unless-stopped
     ports:
       - "8000:8000"
     volumes:
+      # Mount toàn bộ source (hot reload khi dev)
       - ../backend-api:/var/www
+      # Giữ vendor/ trong container, không bị overwrite bởi volume
+      - backend_vendor:/var/www/vendor
+      # Giữ storage và cache trong named volume
       - backend_storage:/var/www/storage
       - backend_bootstrap_cache:/var/www/bootstrap/cache
     environment:
-      - DB_HOST=mysql
-      - DB_PORT=3306
-      - DB_DATABASE=internship_management
-      - DB_USERNAME=root
-      - DB_PASSWORD=root
-    command: php artisan serve --host=0.0.0.0 --port=8000
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_URL: http://localhost:8000
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: capstone_internship_management
+      DB_USERNAME: root
+      DB_PASSWORD: root
+      SESSION_DRIVER: file
+      CACHE_DRIVER: file
+      QUEUE_CONNECTION: sync
+    # Chỉ khởi động sau khi MySQL healthy
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     networks:
       - app-network
 
+  # ----------------------------------------------------------
+  # Frontend React
+  # ----------------------------------------------------------
   frontend:
     image: node:20-alpine
     container_name: frontend-ui
+    restart: unless-stopped
     working_dir: /app
     ports:
       - "3000:3000"
     volumes:
       - ../frontend-ui:/app
+      # node_modules dùng named volume riêng → npm install chỉ chạy 1 lần
+      - frontend_node_modules:/app/node_modules
+    # Cài node_modules nếu chưa có, rồi mới dev
     command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 3000"
     networks:
       - app-network
 
-  mysql:
-    image: mysql:8.0
-    container_name: mysql_db
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: internship_management
-    ports:
-      - "3306:3306"
-    networks:
-      - app-network
-
+  # ----------------------------------------------------------
+  # phpMyAdmin
+  # ----------------------------------------------------------
   phpmyadmin:
-    image: phpmyadmin
+    image: phpmyadmin:latest
     container_name: phpmyadmin_tool
+    restart: unless-stopped
     environment:
       PMA_HOST: mysql
+      PMA_USER: root
+      PMA_PASSWORD: root
     ports:
       - "8080:80"
+    depends_on:
+      mysql:
+        condition: service_healthy
     networks:
       - app-network
 
+# ============================================================
+# Networks
+# ============================================================
 networks:
   app-network:
     driver: bridge
 
-#  PHẦN NÀY BẮT BUỘC PHẢI CÓ
+# ============================================================
+# Volumes
+# ============================================================
 volumes:
-  backend_storage:
-  backend_bootstrap_cache:
+  mysql_data:          # Dữ liệu MySQL bền vững
+  backend_vendor:      # vendor/ PHP — không bị overwrite
+  backend_storage:     # storage/ Laravel
+  backend_bootstrap_cache:  # bootstrap/cache/
+  frontend_node_modules:    # node_modules React — không bị overwrite
